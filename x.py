@@ -57,8 +57,10 @@ def write_file(file, contents):
         f.write(contents)
 
 def update_debian():
-    arch_case = 'dpkgArch="$(dpkg --print-architecture)"; \\\n'
-    arch_case += '    case "${dpkgArch##*-}" in \\\n'
+    arch_case = (
+        'dpkgArch="$(dpkg --print-architecture)"; \\\n'
+        + '    case "${dpkgArch##*-}" in \\\n'
+    )
     for arch in debian_arches:
         hash = rustup_hash(arch.rust)
         arch_case += f"        {arch.dpkg}) rustArch='{arch.rust}'; rustupSha256='{hash}' ;; \\\n"
@@ -84,8 +86,9 @@ def update_debian():
         write_file(f"{rust_version}/{variant}/slim/Dockerfile", rendered)
 
 def update_alpine():
-    arch_case = 'apkArch="$(apk --print-arch)"; \\\n'
-    arch_case += '    case "$apkArch" in \\\n'
+    arch_case = (
+        'apkArch="$(apk --print-arch)"; \\\n' + '    case "$apkArch" in \\\n'
+    )
     for arch in alpine_arches:
         hash = rustup_hash(arch.rust)
         arch_case += f"        {arch.apk}) rustArch='{arch.rust}'; rustupSha256='{hash}' ;; \\\n"
@@ -129,10 +132,7 @@ def file_commit(file):
 
 def version_tags():
     parts = rust_version.split(".")
-    tags = []
-    for i in range(len(parts)):
-        tags.append(".".join(parts[:i + 1]))
-    return tags
+    return [".".join(parts[:i + 1]) for i in range(len(parts))]
 
 def single_library(tags, architectures, dir):
     return f"""
@@ -153,13 +153,10 @@ GitRepo: https://github.com/rust-lang/docker-rust.git
 """
 
     for variant in debian_variants:
-        tags = []
-        for version_tag in version_tags():
-            tags.append(f"{version_tag}-{variant}")
+        tags = [f"{version_tag}-{variant}" for version_tag in version_tags()]
         tags.append(variant)
         if variant == default_debian_variant:
-            for version_tag in version_tags():
-                tags.append(version_tag)
+            tags.extend(iter(version_tags()))
             tags.append("latest")
 
         library += single_library(
@@ -167,13 +164,10 @@ GitRepo: https://github.com/rust-lang/docker-rust.git
                 map(lambda a: a.bashbrew, debian_arches),
                 os.path.join(rust_version, variant))
 
-        tags = []
-        for version_tag in version_tags():
-            tags.append(f"{version_tag}-slim-{variant}")
+        tags = [f"{version_tag}-slim-{variant}" for version_tag in version_tags()]
         tags.append(f"slim-{variant}")
         if variant == default_debian_variant:
-            for version_tag in version_tags():
-                tags.append(f"{version_tag}-slim")
+            tags.extend(f"{version_tag}-slim" for version_tag in version_tags())
             tags.append("slim")
 
         library += single_library(
@@ -182,13 +176,10 @@ GitRepo: https://github.com/rust-lang/docker-rust.git
                 os.path.join(rust_version, variant, "slim"))
 
     for version in alpine_versions:
-        tags = []
-        for version_tag in version_tags():
-            tags.append(f"{version_tag}-alpine{version}")
+        tags = [f"{version_tag}-alpine{version}" for version_tag in version_tags()]
         tags.append(f"alpine{version}")
         if version == default_alpine_version:
-            for version_tag in version_tags():
-                tags.append(f"{version_tag}-alpine")
+            tags.extend(f"{version_tag}-alpine" for version_tag in version_tags())
             tags.append("alpine")
 
         library += single_library(
@@ -207,11 +198,11 @@ if __name__ == "__main__":
         usage()
 
     task = sys.argv[1]
-    if task == "update":
+    if task == "generate-stackbrew-library":
+        generate_stackbrew_library()
+    elif task == "update":
         update_debian()
         update_alpine()
         update_travis()
-    elif task == "generate-stackbrew-library":
-        generate_stackbrew_library()
     else:
         usage()
